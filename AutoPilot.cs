@@ -889,7 +889,7 @@ public class AutoPilot
     {
         try
         {
-            string leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value.ToLower();
+            string leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value;
             
             // Debug: Log the leader name being searched for
             if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
@@ -907,25 +907,51 @@ public class AutoPilot
             }
             
             var playerEntities = AreWeThereYet.Instance.GameController.EntityListWrapper.ValidEntitiesByType[EntityType.Player];
+            var currentPlayerName = AreWeThereYet.Instance.localPlayer?.GetComponent<Player>()?.PlayerName;
             
             // Debug: Log all player entities found
             if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
             {
                 AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Found {playerEntities.Count} player entities:");
+                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Current player name: '{currentPlayerName}'");
                 foreach (var entity in playerEntities)
                 {
                     var playerComponent = entity.GetComponent<Player>();
                     var playerName = playerComponent?.PlayerName ?? "NULL";
-                    var matches = string.Equals(playerName.ToLower(), leaderName, StringComparison.OrdinalIgnoreCase);
-                    AreWeThereYet.Instance.LogMessage($"  - Player: '{playerName}' -> {(matches ? "MATCH!" : "No match")}");
+                    var isCurrentPlayer = string.Equals(playerName, currentPlayerName, StringComparison.OrdinalIgnoreCase);
+                    var matches = !isCurrentPlayer && string.Equals(playerName, leaderName, StringComparison.OrdinalIgnoreCase);
+                    AreWeThereYet.Instance.LogMessage($"  - Player: '{playerName}' (Current: {isCurrentPlayer}) -> {(matches ? "MATCH!" : "No match")}");
                 }
             }
             
-            var result = playerEntities.FirstOrDefault(x => string.Equals(x.GetComponent<Player>()?.PlayerName.ToLower(), leaderName, StringComparison.OrdinalIgnoreCase));
+            // Find the leader, but exclude the current player
+            var result = playerEntities.FirstOrDefault(x => {
+                var playerComponent = x.GetComponent<Player>();
+                var playerName = playerComponent?.PlayerName;
+                
+                // Skip if no player name
+                if (string.IsNullOrEmpty(playerName))
+                    return false;
+                
+                // Skip if this is the current player
+                if (string.Equals(playerName, currentPlayerName, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                
+                // Check if this matches the leader name
+                return string.Equals(playerName, leaderName, StringComparison.OrdinalIgnoreCase);
+            });
             
             if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
             {
-                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Result: {(result != null ? "FOUND" : "NOT FOUND")}");
+                if (result != null)
+                {
+                    var foundPlayerName = result.GetComponent<Player>()?.PlayerName;
+                    AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] SUCCESS: Found leader '{foundPlayerName}'");
+                }
+                else
+                {
+                    AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] FAILED: Leader '{leaderName}' not found");
+                }
             }
             
             return result;
