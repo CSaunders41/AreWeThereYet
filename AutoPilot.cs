@@ -70,17 +70,63 @@ public class AutoPilot
     {
         try
         {
-            foreach (var partyElementWindow in PartyElements.GetPlayerInfoElementList())
+            var leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value.ToLower();
+            
+            // Debug: Log the leader name being searched for
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
             {
-                if (string.Equals(partyElementWindow?.PlayerName?.ToLower(), AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value.ToLower(), StringComparison.CurrentCultureIgnoreCase))
+                AreWeThereYet.Instance.LogMessage($"[GetLeaderPartyElement] Searching for leader: '{leaderName}'");
+            }
+            
+            if (string.IsNullOrEmpty(leaderName))
+            {
+                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
                 {
+                    AreWeThereYet.Instance.LogMessage($"[GetLeaderPartyElement] ERROR: Leader name is null or empty!");
+                }
+                return null;
+            }
+            
+            var partyElements = PartyElements.GetPlayerInfoElementList();
+            
+            // Debug: Log all party members found
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                AreWeThereYet.Instance.LogMessage($"[GetLeaderPartyElement] Found {partyElements.Count} party members:");
+                foreach (var partyElement in partyElements)
+                {
+                    var playerName = partyElement?.PlayerName ?? "NULL";
+                    var zoneName = partyElement?.ZoneName ?? "NULL";
+                    var matches = string.Equals(playerName.ToLower(), leaderName, StringComparison.CurrentCultureIgnoreCase);
+                    AreWeThereYet.Instance.LogMessage($"  - Player: '{playerName}' (Zone: '{zoneName}') -> {(matches ? "MATCH!" : "No match")}");
+                }
+            }
+            
+            foreach (var partyElementWindow in partyElements)
+            {
+                if (string.Equals(partyElementWindow?.PlayerName?.ToLower(), leaderName, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                    {
+                        AreWeThereYet.Instance.LogMessage($"[GetLeaderPartyElement] FOUND leader in party: '{partyElementWindow.PlayerName}' in zone '{partyElementWindow.ZoneName}'");
+                    }
                     return partyElementWindow;
                 }
             }
+            
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                AreWeThereYet.Instance.LogMessage($"[GetLeaderPartyElement] Leader NOT FOUND in party");
+            }
+            
             return null;
         }
-        catch
+        catch (Exception ex)
         {
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                AreWeThereYet.Instance.LogMessage($"[GetLeaderPartyElement] Exception: {ex.Message}");
+            }
             return null;
         }
     }
@@ -382,6 +428,35 @@ public class AutoPilot
                 continue;
             }
             
+            // =================================================================
+            // SECTION 2: SETTINGS VERIFICATION
+            // =================================================================
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                var leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value;
+                AreWeThereYet.Instance.LogMessage($"[AutoPilotLogic] Settings Check:");
+                AreWeThereYet.Instance.LogMessage($"  - Plugin Enabled: {AreWeThereYet.Instance.Settings.Enable.Value}");
+                AreWeThereYet.Instance.LogMessage($"  - AutoPilot Enabled: {AreWeThereYet.Instance.Settings.AutoPilot.Enabled.Value}");
+                AreWeThereYet.Instance.LogMessage($"  - Leader Name: '{leaderName}'");
+                AreWeThereYet.Instance.LogMessage($"  - Leader Name Empty: {string.IsNullOrEmpty(leaderName)}");
+                AreWeThereYet.Instance.LogMessage($"  - Local Player: {(AreWeThereYet.Instance.localPlayer != null ? "Found" : "NULL")}");
+                AreWeThereYet.Instance.LogMessage($"  - Local Player Alive: {(AreWeThereYet.Instance.localPlayer?.IsAlive ?? false)}");
+                AreWeThereYet.Instance.LogMessage($"  - Game In Foreground: {AreWeThereYet.Instance.GameController.IsForeGroundCache}");
+                AreWeThereYet.Instance.LogMessage($"  - Game In Loading: {AreWeThereYet.Instance.GameController.IsLoading}");
+                AreWeThereYet.Instance.LogMessage($"  - Game In Game: {AreWeThereYet.Instance.GameController.InGame}");
+            }
+            
+            // Check for empty leader name
+            if (string.IsNullOrEmpty(AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value))
+            {
+                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                {
+                    AreWeThereYet.Instance.LogMessage($"[AutoPilotLogic] ERROR: Leader name is not set! Please configure the leader name in settings.");
+                }
+                yield return new WaitTime(1000); // Wait longer when settings are not configured
+                continue;
+            }
+            
             // TODO: custom settings if user want automatically close all ui shits.
             // var ingameUi = AreWeThereYet.Instance.GameController.IngameState.IngameUi;
 
@@ -394,6 +469,30 @@ public class AutoPilot
 
             followTarget = GetFollowingTarget();
             var leaderPartyElement = GetLeaderPartyElement();
+
+            // Debug: Log the current status
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                var currentZone = AreWeThereYet.Instance.GameController?.Area.CurrentArea.DisplayName ?? "NULL";
+                var leaderZone = leaderPartyElement?.ZoneName ?? "NULL";
+                AreWeThereYet.Instance.LogMessage($"[AutoPilotLogic] Status Check:");
+                AreWeThereYet.Instance.LogMessage($"  - Follow Target: {(followTarget != null ? "FOUND" : "NULL")}");
+                AreWeThereYet.Instance.LogMessage($"  - Leader Party Element: {(leaderPartyElement != null ? "FOUND" : "NULL")}");
+                AreWeThereYet.Instance.LogMessage($"  - Current Zone: '{currentZone}'");
+                AreWeThereYet.Instance.LogMessage($"  - Leader Zone: '{leaderZone}'");
+                AreWeThereYet.Instance.LogMessage($"  - Same Zone: {(leaderPartyElement != null && leaderZone.Equals(currentZone))}");
+                AreWeThereYet.Instance.LogMessage($"  - Is Transitioning: {_isTransitioning}");
+            }
+
+            if (leaderPartyElement == null)
+            {
+                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                {
+                    AreWeThereYet.Instance.LogMessage($"[AutoPilotLogic] Leader party element not found. Cannot proceed with portal/teleport logic.");
+                }
+                yield return new WaitTime(100); // Wait a bit before retrying
+                continue;
+            }
 
             if (followTarget == null && !leaderPartyElement.ZoneName.Equals(AreWeThereYet.Instance.GameController?.Area.CurrentArea.DisplayName) && !_isTransitioning)
             {
@@ -431,9 +530,10 @@ public class AutoPilot
                     {
                         if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
                         {
-                            AreWeThereYet.Instance.LogMessage("No suitable portal found - using teleport button fallback");
+                            AreWeThereYet.Instance.LogMessage($"No portal found - using teleport button");
                         }
-
+                        
+                        // Check for and click the "Are you sure?" confirmation box if it's open.
                         var tpConfirmation = GetTpConfirmation();
                         if (tpConfirmation != null)
                         {
@@ -443,6 +543,7 @@ public class AutoPilot
                             yield return new WaitTime(1000);
                         }
 
+                        // Use teleport button as fallback
                         var tpButton = GetTpButton(leaderPartyElement);
                         if (!tpButton.Equals(Vector2.Zero))
                         {
@@ -473,7 +574,22 @@ public class AutoPilot
                 // Reset zone tracking when leader is found
                 _lastKnownLeaderZone = "";
                 _leaderZoneChangeTime = DateTime.MinValue;
+                
+                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                {
+                    AreWeThereYet.Instance.LogMessage($"[AutoPilotLogic] Leader found! Processing follow logic...");
+                }
+                
                 var distanceToLeader = Vector3.Distance(AreWeThereYet.Instance.playerPosition, followTarget.Pos);
+                
+                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                {
+                    AreWeThereYet.Instance.LogMessage($"  - Distance to leader: {distanceToLeader:F1}");
+                    AreWeThereYet.Instance.LogMessage($"  - Transition distance threshold: {AreWeThereYet.Instance.Settings.AutoPilot.TransitionDistance.Value}");
+                    AreWeThereYet.Instance.LogMessage($"  - Keep within distance: {AreWeThereYet.Instance.Settings.AutoPilot.KeepWithinDistance.Value}");
+                    AreWeThereYet.Instance.LogMessage($"  - Current tasks: {tasks.Count}");
+                }
+                
                 if (distanceToLeader >= AreWeThereYet.Instance.Settings.AutoPilot.TransitionDistance.Value)
                 {
                     var distanceMoved = Vector3.Distance(lastTargetPosition, followTarget.Pos);
@@ -774,10 +890,52 @@ public class AutoPilot
         try
         {
             string leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value.ToLower();
-            return AreWeThereYet.Instance.GameController.EntityListWrapper.ValidEntitiesByType[EntityType.Player].FirstOrDefault(x => string.Equals(x.GetComponent<Player>()?.PlayerName.ToLower(), leaderName, StringComparison.OrdinalIgnoreCase));
+            
+            // Debug: Log the leader name being searched for
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Searching for leader: '{leaderName}'");
+            }
+            
+            if (string.IsNullOrEmpty(leaderName))
+            {
+                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                {
+                    AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] ERROR: Leader name is null or empty!");
+                }
+                return null;
+            }
+            
+            var playerEntities = AreWeThereYet.Instance.GameController.EntityListWrapper.ValidEntitiesByType[EntityType.Player];
+            
+            // Debug: Log all player entities found
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Found {playerEntities.Count} player entities:");
+                foreach (var entity in playerEntities)
+                {
+                    var playerComponent = entity.GetComponent<Player>();
+                    var playerName = playerComponent?.PlayerName ?? "NULL";
+                    var matches = string.Equals(playerName.ToLower(), leaderName, StringComparison.OrdinalIgnoreCase);
+                    AreWeThereYet.Instance.LogMessage($"  - Player: '{playerName}' -> {(matches ? "MATCH!" : "No match")}");
+                }
+            }
+            
+            var result = playerEntities.FirstOrDefault(x => string.Equals(x.GetComponent<Player>()?.PlayerName.ToLower(), leaderName, StringComparison.OrdinalIgnoreCase));
+            
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Result: {(result != null ? "FOUND" : "NOT FOUND")}");
+            }
+            
+            return result;
         }
-        catch
+        catch (Exception ex)
         {
+            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            {
+                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Exception: {ex.Message}");
+            }
             return null;
         }
     }
