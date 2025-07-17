@@ -25,6 +25,9 @@ public class AutoPilot
     private Entity followTarget;
 
     private List<TaskNode> tasks = new List<TaskNode>();
+    
+    // Debug messages for visual display
+    private List<string> debugMessages = new List<string>();
 
     private LineOfSight LineOfSight => AreWeThereYet.Instance.lineOfSight;
 
@@ -1210,6 +1213,25 @@ public class AutoPilot
                         }
                     }
                 }
+                
+                // Show debug messages from methods
+                if (debugMessages.Count > 0)
+                {
+                    AreWeThereYet.Instance.Graphics.DrawText(
+                        "--- DEBUG MESSAGES ---", 
+                        new System.Numerics.Vector2(10, debugY), 
+                        debugColor);
+                    debugY += 20;
+                    
+                    foreach (var message in debugMessages)
+                    {
+                        AreWeThereYet.Instance.Graphics.DrawText(
+                            message, 
+                            new System.Numerics.Vector2(10, debugY), 
+                            debugColor);
+                        debugY += 20;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -1219,6 +1241,9 @@ public class AutoPilot
                     Color.Red);
             }
         }
+        
+        // Clear debug messages for next frame
+        debugMessages.Clear();
 
         try
         {
