@@ -1094,6 +1094,158 @@ public class AutoPilot
         if (!AreWeThereYet.Instance.Settings.AutoPilot.Enabled || AreWeThereYet.Instance.GameController.IsLoading || !AreWeThereYet.Instance.GameController.InGame)
             return;
 
+        // VISIBLE DEBUG INDICATOR - Show on screen instead of log
+        if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+        {
+            try
+            {
+                var debugY = 200f;
+                var debugColor = Color.Yellow;
+                
+                // Show debug status
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    "*** DEBUG MODE ENABLED ***", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                // Show leader search results
+                var leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value ?? "NULL";
+                var currentPlayerName = AreWeThereYet.Instance.localPlayer?.GetComponent<Player>()?.PlayerName ?? "NULL";
+                
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"Leader Name: '{leaderName}'", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"Current Player: '{currentPlayerName}'", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                // Show player entity count
+                var playerEntities = AreWeThereYet.Instance.GameController?.EntityListWrapper?.ValidEntitiesByType?[EntityType.Player];
+                var playerCount = playerEntities?.Count ?? 0;
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"Player Entities Found: {playerCount}", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                // Show party member count
+                var partyMembers = PartyElements.GetPlayerInfoElementList();
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"Party Members Found: {partyMembers?.Count ?? 0}", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                // Show autopilot status
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"AutoPilot Coroutine: {(autoPilotCoroutine?.Running == true ? "RUNNING" : "DEAD")}", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                // Show followTarget status
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"Follow Target: {(followTarget != null ? "FOUND" : "NULL")}", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                // Show task count
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"Current Tasks: {tasks?.Count ?? 0}", 
+                    new System.Numerics.Vector2(10, debugY), 
+                    debugColor);
+                debugY += 20;
+                
+                // Show detailed player entity information
+                if (playerEntities?.Count > 0)
+                {
+                    AreWeThereYet.Instance.Graphics.DrawText(
+                        "--- PLAYER ENTITIES ---", 
+                        new System.Numerics.Vector2(10, debugY), 
+                        debugColor);
+                    debugY += 20;
+                    
+                    foreach (var entity in playerEntities.Take(5)) // Show first 5 to avoid screen clutter
+                    {
+                        try
+                        {
+                            var playerComponent = entity?.GetComponent<Player>();
+                            var playerName = playerComponent?.PlayerName ?? "NULL";
+                            var isCurrentPlayer = string.Equals(playerName, currentPlayerName, StringComparison.OrdinalIgnoreCase);
+                            var matches = !isCurrentPlayer && string.Equals(playerName, leaderName, StringComparison.OrdinalIgnoreCase);
+                            
+                            var statusText = isCurrentPlayer ? "(YOU)" : matches ? "(MATCH!)" : "(No match)";
+                            var color = matches ? Color.Green : isCurrentPlayer ? Color.Blue : Color.Gray;
+                            
+                            AreWeThereYet.Instance.Graphics.DrawText(
+                                $"  {playerName} {statusText}", 
+                                new System.Numerics.Vector2(10, debugY), 
+                                color);
+                            debugY += 20;
+                        }
+                        catch (Exception ex)
+                        {
+                            AreWeThereYet.Instance.Graphics.DrawText(
+                                $"  ERROR: {ex.Message}", 
+                                new System.Numerics.Vector2(10, debugY), 
+                                Color.Red);
+                            debugY += 20;
+                        }
+                    }
+                }
+                
+                // Show party member information
+                if (partyMembers?.Count > 0)
+                {
+                    AreWeThereYet.Instance.Graphics.DrawText(
+                        "--- PARTY MEMBERS ---", 
+                        new System.Numerics.Vector2(10, debugY), 
+                        debugColor);
+                    debugY += 20;
+                    
+                    foreach (var partyMember in partyMembers.Take(5)) // Show first 5 to avoid screen clutter
+                    {
+                        try
+                        {
+                            var playerName = partyMember?.PlayerName ?? "NULL";
+                            var zoneName = partyMember?.ZoneName ?? "NULL";
+                            var matches = string.Equals(playerName, leaderName, StringComparison.OrdinalIgnoreCase);
+                            
+                            var color = matches ? Color.Green : Color.Gray;
+                            
+                            AreWeThereYet.Instance.Graphics.DrawText(
+                                $"  {playerName} in {zoneName} {(matches ? "(MATCH!)" : "")}", 
+                                new System.Numerics.Vector2(10, debugY), 
+                                color);
+                            debugY += 20;
+                        }
+                        catch (Exception ex)
+                        {
+                            AreWeThereYet.Instance.Graphics.DrawText(
+                                $"  ERROR: {ex.Message}", 
+                                new System.Numerics.Vector2(10, debugY), 
+                                Color.Red);
+                            debugY += 20;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AreWeThereYet.Instance.Graphics.DrawText(
+                    $"DEBUG ERROR: {ex.Message}", 
+                    new System.Numerics.Vector2(10, 200), 
+                    Color.Red);
+            }
+        }
+
         try
         {
             var portalLabels =
