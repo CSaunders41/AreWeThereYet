@@ -70,7 +70,7 @@ public class AutoPilot
     {
         try
         {
-            var leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value.ToLower();
+            var leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value;
             
             // Debug: Log the leader name being searched for
             if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
@@ -97,14 +97,14 @@ public class AutoPilot
                 {
                     var playerName = partyElement?.PlayerName ?? "NULL";
                     var zoneName = partyElement?.ZoneName ?? "NULL";
-                    var matches = string.Equals(playerName.ToLower(), leaderName, StringComparison.CurrentCultureIgnoreCase);
+                    var matches = string.Equals(playerName, leaderName, StringComparison.OrdinalIgnoreCase);
                     AreWeThereYet.Instance.LogMessage($"  - Player: '{playerName}' (Zone: '{zoneName}') -> {(matches ? "MATCH!" : "No match")}");
                 }
             }
             
             foreach (var partyElementWindow in partyElements)
             {
-                if (string.Equals(partyElementWindow?.PlayerName?.ToLower(), leaderName, StringComparison.CurrentCultureIgnoreCase))
+                if (string.Equals(partyElementWindow?.PlayerName, leaderName, StringComparison.OrdinalIgnoreCase))
                 {
                     if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
                     {
@@ -590,40 +590,117 @@ public class AutoPilot
                     AreWeThereYet.Instance.LogMessage($"  - Current tasks: {tasks.Count}");
                 }
                 
-                if (distanceToLeader >= AreWeThereYet.Instance.Settings.AutoPilot.TransitionDistance.Value)
+                // Validate distance thresholds to prevent impossible scenarios
+                var transitionDistance = AreWeThereYet.Instance.Settings.AutoPilot.TransitionDistance.Value;
+                var keepWithinDistance = AreWeThereYet.Instance.Settings.AutoPilot.KeepWithinDistance.Value;
+                
+                if (transitionDistance <= keepWithinDistance)
+                {
+                    if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                    {
+                        AreWeThereYet.Instance.LogMessage($"[WARNING] Transition distance ({transitionDistance}) should be greater than keep within distance ({keepWithinDistance})");
+                    }
+                }
+                
+                if (distanceToLeader >= transitionDistance)
                 {
                     var distanceMoved = Vector3.Distance(lastTargetPosition, followTarget.Pos);
-                    if (lastTargetPosition != Vector3.Zero && distanceMoved > AreWeThereYet.Instance.Settings.AutoPilot.TransitionDistance.Value)
+                    
+                    if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
                     {
+                        AreWeThereYet.Instance.LogMessage($"  - Distance moved by leader: {distanceMoved:F1}");
+                        AreWeThereYet.Instance.LogMessage($"  - Leader far away - creating movement task");
+                    }
+                    
+                    if (lastTargetPosition != Vector3.Zero && distanceMoved > transitionDistance)
+                    {
+                        // Leader moved far - check for portal first
                         var transition = GetBestPortalLabel(leaderPartyElement);
                         if (transition != null && transition.ItemOnGround.DistancePlayer < 80)
+                        {
+                            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                            {
+                                AreWeThereYet.Instance.LogMessage($"  - Adding portal transition task");
+                            }
                             tasks.Add(new TaskNode(transition, 200, TaskNodeType.Transition));
+                        }
+                        else
+                        {
+                            // No portal, add movement task
+                            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                            {
+                                AreWeThereYet.Instance.LogMessage($"  - Adding movement task to leader position");
+                            }
+                            tasks.Add(new TaskNode(followTarget.Pos, keepWithinDistance));
+                        }
                     }
                     else if (tasks.Count == 0 && distanceMoved < 2000 && distanceToLeader > 200 && distanceToLeader < 2000)
                     {
-                        tasks.Add(new TaskNode(followTarget.Pos, AreWeThereYet.Instance.Settings.AutoPilot.KeepWithinDistance));
+                        // Leader is stationary but far - create movement task
+                        if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                        {
+                            AreWeThereYet.Instance.LogMessage($"  - Adding movement task to stationary leader");
+                        }
+                        tasks.Add(new TaskNode(followTarget.Pos, keepWithinDistance));
                     }
-
                     else if (tasks.Count > 0)
                     {
+                        // Add waypoint if leader moved far from last task
                         var distanceFromLastTask = Vector3.Distance(tasks.Last().WorldPosition, followTarget.Pos);
-                        if (distanceFromLastTask >= AreWeThereYet.Instance.Settings.AutoPilot.KeepWithinDistance)
-                            tasks.Add(new TaskNode(followTarget.Pos, AreWeThereYet.Instance.Settings.AutoPilot.KeepWithinDistance));
+                        if (distanceFromLastTask >= keepWithinDistance)
+                        {
+                            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                            {
+                                AreWeThereYet.Instance.LogMessage($"  - Adding waypoint task (distance from last task: {distanceFromLastTask:F1})");
+                            }
+                            tasks.Add(new TaskNode(followTarget.Pos, keepWithinDistance));
+                        }
                     }
                 }
                 else
                 {
+                    if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                    {
+                        AreWeThereYet.Instance.LogMessage($"  - Leader close by - processing close follow logic");
+                    }
+                    
                     if (tasks.Count > 0)
                     {
+                        if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                        {
+                            AreWeThereYet.Instance.LogMessage($"  - Clearing {tasks.Count} existing movement/transition tasks");
+                        }
+                        
                         for (var i = tasks.Count - 1; i >= 0; i--)
                             if (tasks[i].Type == TaskNodeType.Movement || tasks[i].Type == TaskNodeType.Transition)
                                 tasks.RemoveAt(i);
                         yield return null;
                     }
+                    
                     if (AreWeThereYet.Instance.Settings.AutoPilot.CloseFollow.Value)
                     {
-                        if (distanceToLeader >= AreWeThereYet.Instance.Settings.AutoPilot.KeepWithinDistance.Value)
-                            tasks.Add(new TaskNode(followTarget.Pos, AreWeThereYet.Instance.Settings.AutoPilot.KeepWithinDistance));
+                        if (distanceToLeader >= keepWithinDistance)
+                        {
+                            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                            {
+                                AreWeThereYet.Instance.LogMessage($"  - Close follow: Adding movement task (distance {distanceToLeader:F1} >= {keepWithinDistance})");
+                            }
+                            tasks.Add(new TaskNode(followTarget.Pos, keepWithinDistance));
+                        }
+                        else
+                        {
+                            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                            {
+                                AreWeThereYet.Instance.LogMessage($"  - Close follow: Within range (distance {distanceToLeader:F1} < {keepWithinDistance}) - no action needed");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                        {
+                            AreWeThereYet.Instance.LogMessage($"  - Close follow disabled - no close follow tasks created");
+                        }
                     }
 
                     var isHideout = (bool)AreWeThereYet.Instance?.GameController?.Area?.CurrentArea?.IsHideout;
@@ -767,11 +844,17 @@ public class AutoPilot
 
                             currentTask.AttemptCount++;
                             if (currentTask.AttemptCount > 6)
-                                tasks.RemoveAt(0);
                             {
-                                yield return null;
-                                continue;
+                                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+                                {
+                                    AreWeThereYet.Instance.LogMessage("Transition task failed after 6 attempts - removing task");
+                                }
+                                tasks.RemoveAt(0);
+                                _isTransitioning = false; // Reset transition flag on failure
                             }
+                            
+                            yield return null;
+                            continue;
                         }
 
                     case TaskNodeType.MercenaryOptIn:

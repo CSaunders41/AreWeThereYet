@@ -38,35 +38,92 @@ public static class PartyElements
         try
         {
             var baseWindow = AreWeThereYet.Instance.GameController?.IngameState?.IngameUi?.PartyElement;
-            var partElementList = baseWindow?.Children?[0]?.Children?[0]?.Children;
-            if (partElementList != null)
+            if (baseWindow?.Children?.Count > 0)
             {
-                foreach (var partyElement in partElementList)
+                var firstChild = baseWindow.Children[0];
+                if (firstChild?.Children?.Count > 0)
                 {
-                    var playerName = partyElement?.Children?[0]?.Text;
-                    if (partyElement?.Children != null)
+                    var secondChild = firstChild.Children[0];
+                    var partElementList = secondChild?.Children;
+                    
+                    if (partElementList != null)
                     {
-                        var newElement = new PartyElementWindow
+                        foreach (var partyElement in partElementList)
                         {
-                            PlayerName = playerName,
-                            //get party element
-                            Element = partyElement,
-                            //party element swirly tp thingo, if in another area it becomes child 4 as child 3 becomes the area string
-                            TpButton = partyElement.Children[partyElement.ChildCount == 4 ? 3 : 2],
-                            ZoneName = (partyElement.ChildCount == 4) ? partyElement.Children[2].Text : AreWeThereYet.Instance.GameController?.Area.CurrentArea.DisplayName
-                        };
+                            if (partyElement?.Children?.Count > 0)
+                            {
+                                var playerName = partyElement.Children[0]?.Text;
+                                
+                                // Skip if no valid player name
+                                if (string.IsNullOrEmpty(playerName))
+                                    continue;
+                                
+                                var newElement = new PartyElementWindow
+                                {
+                                    PlayerName = playerName,
+                                    Element = partyElement,
+                                    // More robust zone name and teleport button detection
+                                    ZoneName = GetZoneNameFromPartyElement(partyElement),
+                                    TpButton = GetTpButtonFromPartyElement(partyElement)
+                                };
 
-                        playersInParty.Add(newElement);
+                                playersInParty.Add(newElement);
+                            }
+                        }
                     }
                 }
             }
         }
         catch (Exception e)
         {
-            AreWeThereYet.Instance.LogError("Character: " + e, 5);
+            AreWeThereYet.Instance.LogError($"GetPlayerInfoElementList failed: {e.Message}", 5);
         }
 
         return playersInParty;
+    }
+    
+    private static string GetZoneNameFromPartyElement(Element partyElement)
+    {
+        try
+        {
+            if (partyElement?.Children?.Count >= 3)
+            {
+                // If there are 4 children, the zone name is in child 2
+                if (partyElement.ChildCount == 4)
+                {
+                    return partyElement.Children[2]?.Text ?? AreWeThereYet.Instance.GameController?.Area.CurrentArea.DisplayName;
+                }
+            }
+            
+            // Default to current area if we can't determine zone from UI
+            return AreWeThereYet.Instance.GameController?.Area.CurrentArea.DisplayName ?? "";
+        }
+        catch
+        {
+            return AreWeThereYet.Instance.GameController?.Area.CurrentArea.DisplayName ?? "";
+        }
+    }
+    
+    private static Element GetTpButtonFromPartyElement(Element partyElement)
+    {
+        try
+        {
+            if (partyElement?.Children?.Count >= 3)
+            {
+                // The teleport button is in child 3 if there are 4 children, child 2 if there are 3
+                int tpButtonIndex = partyElement.ChildCount == 4 ? 3 : 2;
+                if (tpButtonIndex < partyElement.Children.Count)
+                {
+                    return partyElement.Children[tpButtonIndex];
+                }
+            }
+            
+            return new Element(); // Return empty element if can't find button
+        }
+        catch
+        {
+            return new Element(); // Return empty element on error
+        }
     }
 }
 
