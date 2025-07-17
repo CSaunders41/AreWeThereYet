@@ -974,77 +974,51 @@ public class AutoPilot
         {
             string leaderName = AreWeThereYet.Instance.Settings.AutoPilot.LeaderName.Value;
             
-            // Debug: Log the leader name being searched for
-            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
-            {
-                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Searching for leader: '{leaderName}'");
-            }
+            // Debug: Add visual debugging to see what's happening
+            debugMessages.Add($"GetFollowingTarget: Searching for leader: '{leaderName}'");
             
             if (string.IsNullOrEmpty(leaderName))
             {
-                if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
-                {
-                    AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] ERROR: Leader name is null or empty!");
-                }
+                debugMessages.Add("GetFollowingTarget: ERROR - Leader name is null or empty!");
                 return null;
             }
             
             var playerEntities = AreWeThereYet.Instance.GameController.EntityListWrapper.ValidEntitiesByType[EntityType.Player];
             var currentPlayerName = AreWeThereYet.Instance.localPlayer?.GetComponent<Player>()?.PlayerName;
             
-            // Debug: Log all player entities found
-            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
+            debugMessages.Add($"GetFollowingTarget: Found {playerEntities.Count} entities from EntityListWrapper");
+            debugMessages.Add($"GetFollowingTarget: Current player: '{currentPlayerName}'");
+            
+            // Check each entity in detail
+            foreach (var entity in playerEntities)
             {
-                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Found {playerEntities.Count} player entities:");
-                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Current player name: '{currentPlayerName}'");
-                foreach (var entity in playerEntities)
+                try
                 {
                     var playerComponent = entity.GetComponent<Player>();
                     var playerName = playerComponent?.PlayerName ?? "NULL";
                     var isCurrentPlayer = string.Equals(playerName, currentPlayerName, StringComparison.OrdinalIgnoreCase);
                     var matches = !isCurrentPlayer && string.Equals(playerName, leaderName, StringComparison.OrdinalIgnoreCase);
-                    AreWeThereYet.Instance.LogMessage($"  - Player: '{playerName}' (Current: {isCurrentPlayer}) -> {(matches ? "MATCH!" : "No match")}");
+                    
+                    debugMessages.Add($"  Entity: '{playerName}' (Current: {isCurrentPlayer}) -> {(matches ? "MATCH!" : "No match")}");
+                    
+                    if (matches)
+                    {
+                        debugMessages.Add($"GetFollowingTarget: SUCCESS - Found leader entity '{playerName}'");
+                        return entity;
+                    }
+                }
+                catch (Exception entityEx)
+                {
+                    debugMessages.Add($"GetFollowingTarget: Error checking entity: {entityEx.Message}");
                 }
             }
             
-            // Find the leader, but exclude the current player
-            var result = playerEntities.FirstOrDefault(x => {
-                var playerComponent = x.GetComponent<Player>();
-                var playerName = playerComponent?.PlayerName;
-                
-                // Skip if no player name
-                if (string.IsNullOrEmpty(playerName))
-                    return false;
-                
-                // Skip if this is the current player
-                if (string.Equals(playerName, currentPlayerName, StringComparison.OrdinalIgnoreCase))
-                    return false;
-                
-                // Check if this matches the leader name
-                return string.Equals(playerName, leaderName, StringComparison.OrdinalIgnoreCase);
-            });
-            
-            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
-            {
-                if (result != null)
-                {
-                    var foundPlayerName = result.GetComponent<Player>()?.PlayerName;
-                    AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] SUCCESS: Found leader '{foundPlayerName}'");
-                }
-                else
-                {
-                    AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] FAILED: Leader '{leaderName}' not found");
-                }
-            }
-            
-            return result;
+            debugMessages.Add($"GetFollowingTarget: FAILED - No matching entity found for '{leaderName}'");
+            return null;
         }
         catch (Exception ex)
         {
-            if (AreWeThereYet.Instance.Settings.Debug.ShowDetailedDebug?.Value == true)
-            {
-                AreWeThereYet.Instance.LogMessage($"[GetFollowingTarget] Exception: {ex.Message}");
-            }
+            debugMessages.Add($"GetFollowingTarget: Exception: {ex.Message}");
             return null;
         }
     }
